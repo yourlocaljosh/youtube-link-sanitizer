@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube Link Sanitizer",
+  "version": "0.1.0",
+  "description": "Strips tracking parameters from YouTube links you copy and from YouTube pages you open.",
+  "minimum_chrome_version": "111",
+  "permissions": ["declarativeNetRequestWithHostAccess"],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "*://*.youtu.be/*",
+    "*://*.youtube-nocookie.com/*"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "youtube-tracking",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*", "*://*.youtu.be/*"],
+      "js": ["src/sanitize.js", "src/content.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    }
+  ]
+}

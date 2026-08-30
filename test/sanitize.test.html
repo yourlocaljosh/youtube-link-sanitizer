@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>YouTube Link Sanitizer tests</title>
+  </head>
+  <body>
+    <pre id="output">running</pre>
+    <script src="../src/sanitize.js"></script>
+    <script>
+      (async () => {
+        const api = globalThis.__youtubeLinkSanitizer;
+        const lines = [];
+        let failures = 0;
+
+        const check = (name, actual, expected) => {
+          if (actual === expected) {
+            lines.push('PASS  ' + name);
+            return;
+          }
+          failures += 1;
+          lines.push('FAIL  ' + name);
+          lines.push('        expected: ' + JSON.stringify(expected));
+          lines.push('        actual:   ' + JSON.stringify(actual));
+        };
+
+        const url = (name, input, expected) => check(name, api.sanitizeUrl(input), expected);
+        const unchangedUrl = (name, input) => check(name, api.sanitizeUrl(input), input);
+        const text = (name, input, expected) => check(name, api.sanitizeText(input), expected);
+
+        lines.push('--- sanitizeUrl ---');
+        url('share si stripped', 'https://youtu.be/dQw4w9WgXcQ?si=aB1_cD2', 'https://youtu.be/dQw4w9WgXcQ');
+        url('timestamp preserved', 'https://youtu.be/dQw4w9WgXcQ?si=x&t=42', 'https://youtu.be/dQw4w9WgXcQ?t=42');
+        url(
+          'watch params preserved',
+          'https://www.youtube.com/watch?v=abc&si=zz&list=PLxyz&index=3',
+          'https://www.youtube.com/watch?v=abc&list=PLxyz&index=3'
+        );
+        url('feature=share stripped', 'https://www.youtube.com/watch?v=abc&feature=share', 'https://www.youtube.com/watch?v=abc');
+        url('shorts pp stripped', 'https://www.youtube.com/shorts/abc?feature=share&pp=ygUE', 'https://www.youtube.com/shorts/abc');
+        url('utm prefix catch-all', 'https://www.youtube.com/watch?v=abc&utm_source=news&utm_madeup=1', 'https://www.youtube.com/watch?v=abc');
+        url('uppercase SI stripped', 'https://youtu.be/abc?SI=x', 'https://youtu.be/abc');
+        url('fragment preserved', 'https://youtu.be/abc?si=x#frag', 'https://youtu.be/abc#frag');
+        url('music subdomain', 'https://music.youtube.com/watch?v=abc&si=x', 'https://music.youtube.com/watch?v=abc');
+        url('channel handle', 'https://www.youtube.com/@somechannel?si=x', 'https://www.youtube.com/@somechannel');
+        url('playlist page', 'https://www.youtube.com/playlist?list=PL1&si=x', 'https://www.youtube.com/playlist?list=PL1');
+        url('nocookie embed', 'https://www.youtube-nocookie.com/embed/abc?si=x', 'https://www.youtube-nocookie.com/embed/abc');
+        url(
+          'embeds_referring_euri stripped',
+          'https://www.youtube.com/watch?v=abc&embeds_referring_euri=https%3A%2F%2Fexample.com%2F',
+          'https://www.youtube.com/watch?v=abc'
+        );
+
+        unchangedUrl('psi is not si', 'https://youtu.be/abc?psi=x');
+        unchangedUrl('already clean', 'https://www.youtube.com/watch?v=abc&t=30');
+        unchangedUrl('non-youtube host', 'https://example.com/watch?v=a&si=b');
+        unchangedUrl('lookalike prefix domain', 'https://notyoutube.com/watch?v=a&si=b');
+        unchangedUrl('lookalike suffix domain', 'https://youtube.com.attacker.net/watch?v=a&si=b');
+        unchangedUrl('non-http scheme', 'javascript:void(0)');
+        unchangedUrl('not a url', 'not a url at all');
+        unchangedUrl('empty string', '');
+
+        lines.push('--- sanitizeText ---');
+        text(
+          'link inside a sentence',
+          'Watch this: https://youtu.be/abc?si=xyz&t=10 it is great',
+          'Watch this: https://youtu.be/abc?t=10 it is great'
+        );
+        text('trailing punctuation kept', 'see (https://youtu.be/abc?si=z).', 'see (https://youtu.be/abc).');
+        text('scheme-less link', 'youtu.be/abc?si=z', 'youtu.be/abc');
+        text('www scheme-less link', 'www.youtube.com/watch?v=a&si=z', 'www.youtube.com/watch?v=a');
+        text(
+          'two links in one string',
+          'a https://youtu.be/one?si=1 b https://youtu.be/two?si=2',
+          'a https://youtu.be/one b https://youtu.be/two'
+        );
+        text(
+          'multiline block',
+          'first https://youtu.be/one?si=1\nsecond https://youtu.be/two?si=2\n',
+          'first https://youtu.be/one\nsecond https://youtu.be/two\n'
+        );
+        text('non-youtube link untouched', 'https://example.com/?si=1', 'https://example.com/?si=1');
+        text('plain prose untouched', 'hello world', 'hello world');
+
+        lines.push('--- sanitizeHtml / sanitizeTree ---');
+        check(
+          'anchor href cleaned',
+          api.sanitizeHtml('<a href="https://youtu.be/abc?si=z">watch</a>'),
+          '<a href="https://youtu.be/abc">watch</a>'
+        );
+        check(
+          'html text node cleaned',
+          api.sanitizeHtml('<p>go to https://youtu.be/abc?si=z now</p>'),
+          '<p>go to https://youtu.be/abc now</p>'
+        );
+        check('untouched html identical', api.sanitizeHtml('<p>hello</p>'), '<p>hello</p>');
+
+        const tree = document.createElement('div');
+        tree.innerHTML =
+          '<a href="https://www.youtube.com/watch?v=a&amp;si=b">x</a><span>https://youtu.be/c?si=d</span>';
+        check('sanitizeTree reports change', api.sanitizeTree(tree), true);
+        check('sanitizeTree fixed href', tree.querySelector('a').getAttribute('href'), 'https://www.youtube.com/watch?v=a');
+        check('sanitizeTree fixed text', tree.querySelector('span').textContent, 'https://youtu.be/c');
+        check('sanitizeTree no-op returns false', api.sanitizeTree(document.createElement('div')), false);
+
+        lines.push('--- rules.json parity ---');
+        try {
+          const rules = await fetch('../rules.json').then((response) => response.json());
+          const rule = rules[0];
+          const removeParams = rule.action.redirect.transform.queryTransform.removeParams;
+          const regexFilter = rule.condition.regexFilter;
+
+          const missingFromRules = api.trackingParams.filter((name) => !removeParams.includes(name));
+          const extraInRules = removeParams.filter((name) => !api.trackingParams.includes(name));
+          const alternation = regexFilter.slice(regexFilter.lastIndexOf('(') + 1, regexFilter.lastIndexOf(')')).split('|');
+          const missingFromRegex = removeParams.filter((name) => !alternation.includes(name));
+
+          check('every runtime param is in removeParams', missingFromRules.join(','), '');
+          check('removeParams has no strays', extraInRules.join(','), '');
+          check('every removeParam is in regexFilter', missingFromRegex.join(','), '');
+          check('regexFilter needs no json escapes', /\\/.test(regexFilter), false);
+
+          const pattern = new RegExp(regexFilter);
+          check('regex matches si link', pattern.test('https://youtu.be/abc?si=x'), true);
+          check('regex matches trailing si', pattern.test('https://www.youtube.com/watch?v=a&si=x'), true);
+          check('regex matches deep subdomain', pattern.test('https://music.youtube.com/watch?v=a&si=x'), true);
+          check('regex matches utm', pattern.test('https://www.youtube.com/watch?v=a&utm_source=x'), true);
+          check('regex ignores psi first', pattern.test('https://youtu.be/abc?psi=x'), false);
+          check('regex ignores psi later', pattern.test('https://www.youtube.com/watch?v=a&psi=x'), false);
+          check('regex ignores clean link', pattern.test('https://www.youtube.com/watch?v=a&t=30'), false);
+          check('regex ignores other hosts', pattern.test('https://example.com/watch?si=x'), false);
+          check('regex ignores lookalike host', pattern.test('https://youtube.com.attacker.net/watch?si=x'), false);
+
+          const transformed = new URL('https://www.youtube.com/watch?v=a&si=x&utm_source=y&t=9');
+          for (const name of removeParams) transformed.searchParams.delete(name);
+          check('transform keeps real params', transformed.toString(), 'https://www.youtube.com/watch?v=a&t=9');
+          check('no redirect loop after transform', pattern.test(transformed.toString()), false);
+        } catch (error) {
+          failures += 1;
+          lines.push('FAIL  rules.json could not be read: ' + error.message);
+          lines.push('        run chrome with --allow-file-access-from-files');
+        }
+
+        lines.push('');
+        lines.push(failures === 0 ? 'RESULT: ALL PASS' : 'RESULT: ' + failures + ' FAILURE(S)');
+        document.getElementById('output').textContent = lines.join('\n');
+      })();
+    </script>
+  </body>
+</html>

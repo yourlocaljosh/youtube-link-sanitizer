@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>YouTube Link Sanitizer clipboard tests</title>
+  </head>
+  <body>
+    <pre id="output">running</pre>
+    <div id="fixture"></div>
+    <script src="../src/sanitize.js"></script>
+    <script>
+      window.harness = { writeTextCalls: [], writeCalls: [] };
+      if (globalThis.Clipboard) {
+        Clipboard.prototype.writeText = function (data) {
+          window.harness.writeTextCalls.push(data);
+          return Promise.resolve();
+        };
+        Clipboard.prototype.write = function (items) {
+          window.harness.writeCalls.push(items);
+          return Promise.resolve();
+        };
+      }
+    </script>
+    <script src="../src/content.js"></script>
+    <script>
+      (async () => {
+        const lines = [];
+        let failures = 0;
+
+        const check = (name, actual, expected) => {
+          if (actual === expected) {
+            lines.push('PASS  ' + name);
+            return;
+          }
+          failures += 1;
+          lines.push('FAIL  ' + name);
+          lines.push('        expected: ' + JSON.stringify(expected));
+          lines.push('        actual:   ' + JSON.stringify(actual));
+        };
+
+        const finish = () => {
+          lines.push('');
+          lines.push(failures === 0 ? 'RESULT: ALL PASS' : 'RESULT: ' + failures + ' FAILURE(S)');
+          document.getElementById('output').textContent = lines.join('\n');
+        };
+
+        const fixture = document.getElementById('fixture');
+
+        const dispatchCopy = (target) => {
+          const event = new ClipboardEvent('copy', {
+            clipboardData: new DataTransfer(),
+            bubbles: true,
+            cancelable: true
+          });
+          target.dispatchEvent(event);
+          return event;
+        };
+
+        lines.push('--- namespace hygiene ---');
+        check('namespace removed from page scope', '__youtubeLinkSanitizer' in globalThis, false);
+
+        lines.push('--- navigator.clipboard.writeText ---');
+        if (!globalThis.Clipboard) {
+          failures += 1;
+          lines.push('FAIL  Clipboard api unavailable in this context');
+          finish();
+          return;
+        }
+
+        check('writeText was patched', Clipboard.prototype.writeText.name, 'writeText');
+
+        await navigator.clipboard.writeText('https://youtu.be/dQw4w9WgXcQ?si=trackme&t=42');
+        check(
+          'writeText sanitizes share link',
+          window.harness.writeTextCalls[0],
+          'https://youtu.be/dQw4w9WgXcQ?t=42'
+        );
+
+        await navigator.clipboard.writeText('nothing to see here');
+        check('writeText leaves plain text alone', window.harness.writeTextCalls[1], 'nothing to see here');
+
+        await navigator.clipboard.writeText('https://example.com/?si=keepme');
+        check('writeText leaves other hosts alone', window.harness.writeTextCalls[2], 'https://example.com/?si=keepme');
+
+        lines.push('--- navigator.clipboard.write ---');
+        const item = new ClipboardItem({
+          'text/plain': new Blob(['https://youtu.be/abc?si=trackme'], { type: 'text/plain' }),
+          'text/html': new Blob(['<a href="https://youtu.be/abc?si=trackme">watch</a>'], { type: 'text/html' })
+        });
+        await navigator.clipboard.write([item]);
+        const written = window.harness.writeCalls[0][0];
+        check(
+          'write sanitizes text/plain',
+          await (await written.getType('text/plain')).text(),
+          'https://youtu.be/abc'
+        );
+        check(
+          'write sanitizes text/html',
+          await (await written.getType('text/html')).text(),
+          '<a href="https://youtu.be/abc">watch</a>'
+        );
+
+        lines.push('--- copy from a text field ---');
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = 'https://youtu.be/dQw4w9WgXcQ?si=trackme';
+        fixture.appendChild(input);
+        input.focus();
+        input.setSelectionRange(0, input.value.length);
+        const fieldEvent = dispatchCopy(input);
+        check('field copy was intercepted', fieldEvent.defaultPrevented, true);
+        check(
+          'field copy is sanitized',
+          fieldEvent.clipboardData.getData('text/plain'),
+          'https://youtu.be/dQw4w9WgXcQ'
+        );
+
+        input.value = 'https://example.com/?si=keepme';
+        input.setSelectionRange(0, input.value.length);
+        const cleanFieldEvent = dispatchCopy(input);
+        check('clean field copy is left to the browser', cleanFieldEvent.defaultPrevented, false);
+        check('clean field copy sets no data', cleanFieldEvent.clipboardData.getData('text/plain'), '');
+
+        input.setSelectionRange(0, 0);
+        const emptyFieldEvent = dispatchCopy(input);
+        check('collapsed field selection is ignored', emptyFieldEvent.defaultPrevented, false);
+        input.blur();
+
+        lines.push('--- copy from a document selection ---');
+        const block = document.createElement('p');
+        block.innerHTML =
+          'watch <a href="https://www.youtube.com/watch?v=abc&amp;si=trackme">this</a> or https://youtu.be/xyz?si=trackme';
+        fixture.appendChild(block);
+
+        const range = document.createRange();
+        range.selectNodeContents(block);
+        const selection = document.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        const selectionEvent = dispatchCopy(block);
+        check('selection copy was intercepted', selectionEvent.defaultPrevented, true);
+        check(
+          'selection copy sanitizes visible text',
+          selectionEvent.clipboardData.getData('text/plain'),
+          'watch this or https://youtu.be/xyz'
+        );
+        check(
+          'selection copy sanitizes anchor href',
+          selectionEvent.clipboardData.getData('text/html'),
+          'watch <a href="https://www.youtube.com/watch?v=abc">this</a> or https://youtu.be/xyz'
+        );
+
+        const cleanBlock = document.createElement('p');
+        cleanBlock.textContent = 'nothing tracked here';
+        fixture.appendChild(cleanBlock);
+        const cleanRange = document.createRange();
+        cleanRange.selectNodeContents(cleanBlock);
+        selection.removeAllRanges();
+        selection.addRange(cleanRange);
+        const cleanSelectionEvent = dispatchCopy(cleanBlock);
+        check('clean selection copy is left alone', cleanSelectionEvent.defaultPrevented, false);
+
+        selection.removeAllRanges();
+        const noSelectionEvent = dispatchCopy(document.body);
+        check('empty selection is ignored', noSelectionEvent.defaultPrevented, false);
+
+        finish();
+      })();
+    </script>
+  </body>
+</html>

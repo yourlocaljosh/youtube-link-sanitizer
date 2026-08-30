@@ -1,0 +1,59 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "redirect",
+      "redirect": {
+        "transform": {
+          "queryTransform": {
+            "removeParams": [
+        "si",
+        "pp",
+        "feature",
+        "ab_channel",
+        "kw",
+        "attr_tag",
+        "source_ve_path",
+        "embeds_referring_euri",
+        "embeds_referring_origin",
+        "embeds_euri",
+        "embeds_origin",
+        "embeds_widget_referrer",
+        "themeRefresh",
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_term",
+        "utm_content",
+        "utm_id",
+        "utm_name",
+        "utm_reader",
+        "utm_referrer",
+        "utm_social",
+        "gclid",
+        "dclid",
+        "fbclid",
+        "msclkid",
+        "twclid",
+        "ttclid",
+        "yclid",
+        "igshid",
+        "mc_eid",
+        "mc_cid",
+        "vero_id",
+        "vero_conv",
+        "ref_src",
+        "ref_url"
+            ]
+          }
+        }
+      }
+    },
+    "condition": {
+      "regexFilter": "^https?://([a-z0-9-]+[.])*(youtube[.]com|youtu[.]be|youtube-nocookie[.]com)/[^?#]*[?]([^#]*&)?(si|pp|feature|ab_channel|kw|attr_tag|source_ve_path|embeds_referring_euri|embeds_referring_origin|embeds_euri|embeds_origin|embeds_widget_referrer|themeRefresh|utm_source|utm_medium|utm_campaign|utm_term|utm_content|utm_id|utm_name|utm_reader|utm_referrer|utm_social|gclid|dclid|fbclid|msclkid|twclid|ttclid|yclid|igshid|mc_eid|mc_cid|vero_id|vero_conv|ref_src|ref_url)=",
+      "isUrlFilterCaseSensitive": true,
+      "resourceTypes": ["main_frame"]
+    }
+  }
+]

@@ -1,102 +1,51 @@
-# ---- Dependencies ----
-node_modules/
-.pnp
-.pnp.js
-.pnp.cjs
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
-
-# ---- Build output ----
-dist/
-build/
-out/
-# WXT build output and generated types
-.output/
-.wxt/
-.vite/
-*.tsbuildinfo
-
 # ---- Packaged extension artifacts ----
-# Never commit these: the .pem is the signing key for your extension ID,
-# and the zip/crx are reproducible build outputs.
+# Never commit the .pem: it is the signing key that determines your extension ID.
 *.crx
 *.pem
 *.zip
-!docs/**/*.zip
 web-ext-artifacts/
 
-# ---- Secrets / local config ----
-# Chrome Web Store publishing creds (client id/secret/refresh token),
-# API keys, signing config.
+# ---- Secrets ----
+# Chrome Web Store publishing credentials (client id/secret/refresh token).
 .env
 .env.*
 !.env.example
-.env.local
-.env.*.local
 secrets.json
 *.key
 
-# ---- Test / coverage ----
-coverage/
-.nyc_output/
-test-results/
-playwright-report/
-blob-report/
-.playwright/
-*.lcov
+# ---- Test / debug output ----
+.chrome-test-profile/
+.chrome-ext-profile/
+*.log
 
-# ---- Caches / tooling ----
+# ---- Optional future tooling ----
+# Kept so adding a build step or test runner later needs no .gitignore changes.
+node_modules/
+dist/
+build/
+.output/
+.wxt/
+.vite/
+coverage/
 .cache/
-.temp/
-.tmp/
-.eslintcache
-.stylelintcache
-.parcel-cache/
-.turbo/
-.rollup.cache/
-node_modules/.cache/
+*.tsbuildinfo
 
 # ---- Editors / IDE ----
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
-!.vscode/launch.json
 .idea/
 *.swp
 *.swo
 *~
 
 # ---- OS cruft ----
-# Windows
 Thumbs.db
-Thumbs.db:encryptable
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 *.lnk
-# macOS
 .DS_Store
-.AppleDouble
-.LSOverride
 ._*
-# Linux
 .directory
 .Trash-*
-
-# ---- Logs ----
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-# ---- Browser profiles used for dev-launching ----
-.chrome-profile/
-.firefox-profile/
-chrome-data/
